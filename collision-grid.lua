@@ -38,7 +38,8 @@ collision_grid.__LICENSE = [[
 ---@param cell_size number
 ---@param width number
 ---@param height number
-function collision_grid:init(cell_size, width, height)
+---@param accessor? fun(entity: table): number, number function to run to extract `x` and `y` coordinates from each entity
+function collision_grid:init(cell_size, width, height, accessor)
   ---@private
   self.grid = {}
   local offset = 5
@@ -63,6 +64,21 @@ function collision_grid:init(cell_size, width, height)
   -- offset on the collision grid directly
   ---@private
   self.cell_offset = cell_size / 2
+
+  -- we have a default to_grid_from_entity
+  -- but will use the provided accessor function
+  -- when we should
+
+  -- get grid coordinates from entity
+  ---@type fun(entity: table): number, number
+  self.to_grid_from_entity = function(entity)
+    return self:to_grid(entity.x, entity.y)
+  end
+  if accessor then
+    self.to_grid_from_entity = function(entity)
+      return self:to_grid(accessor(entity))
+    end
+  end
 end
 
 ---@param x number in world space
@@ -73,24 +89,24 @@ function collision_grid:to_grid(x, y)
   return math.floor((x + self.cell_offset) / self.cell_size), math.floor((y + self.cell_offset) / self.cell_size)
 end
 
----@param entity { x: number, y: number }
+---@param entity table
 ---@return table
 function collision_grid:get_rect(entity)
-  local grid_x, grid_y = self:to_grid(entity.x, entity.y)
+  local grid_x, grid_y = self.to_grid_from_entity(entity)
   return { x = grid_x * self.cell_size, y = grid_y * self.cell_size, width = self.cell_size, height = self.cell_size }
 end
 
 ---registers an entity
----@param entity { x: number, y: number }
+---@param entity table
 function collision_grid:register(entity)
-  local grid_x, grid_y = self:to_grid(entity.x, entity.y)
+  local grid_x, grid_y = self.to_grid_from_entity(entity)
   table.insert(self.grid[grid_y][grid_x], entity)
 end
 
----@param entity { x: number, y: number }
+---@param entity table
 ---@return boolean flag if entity was successfully removed
 function collision_grid:remove(entity)
-  local grid_x, grid_y = self:to_grid(entity.x, entity.y)
+  local grid_x, grid_y = self.to_grid_from_entity(entity)
   for i, ent in ipairs(self.grid[grid_y][grid_x]) do
     if ent == entity then
       table.remove(self.grid[grid_y][grid_x], i)
@@ -101,14 +117,14 @@ function collision_grid:remove(entity)
 end
 
 ---Update the entity within the collision grid.
----This method expects `entity.x` and `enity.y` to be defined
----and to be where the entity **currently is**, and will 'move'
+---This method expects entity to have not been moved yet, and
+---will use where the entity **currently is**, and will 'move'
 ---the entity within the collision grid to `new_x` and `new_y`.
----@param entity { x: number, y: number }
+---@param entity table
 ---@param new_x number in world units
 ---@param new_y number in world units
 function collision_grid:update(entity, new_x, new_y)
-  local grid_x, grid_y = self:to_grid(entity.x, entity.y)
+  local grid_x, grid_y = self.to_grid_from_entity(entity)
   local new_grid_x, new_grid_y = self:to_grid(new_x, new_y)
   -- do nothing if entity has not changed grid
   if grid_x == new_grid_x and grid_y == new_grid_y then
@@ -170,12 +186,13 @@ end
 ---@param cell_size number
 ---@param width number
 ---@param height number
+---@param accessor? fun(entity: table): number, number function to run to extract `x` and `y` coordinates from each entity
 ---@return CollisionGrid
-function collision_grid.new(cell_size, width, height)
+function collision_grid.new(cell_size, width, height, accessor)
   local cg = setmetatable({}, {
     __index = collision_grid,
   })
-  cg:init(cell_size, width, height)
+  cg:init(cell_size, width, height, accessor)
   return cg
 end
 
